@@ -217,15 +217,15 @@ body::before{content:'';position:fixed;inset:0;background:repeating-linear-gradi
 .tt-val{font-size:11px;font-weight:600;margin-bottom:8px;}
 
 /* SUPPLY CHAIN PANEL */
-#sc-panel{position:fixed;inset:0;z-index:1000;background:rgba(4,6,8,0.92);display:none;flex-direction:column;}
+#sc-panel{position:fixed;top:0;left:0;right:0;bottom:0;z-index:10000;background:#040608;display:none;flex-direction:column;}
 #sc-panel.open{display:flex;}
-#sc-head{display:flex;align-items:center;justify-content:space-between;padding:14px 24px;background:#070e14;border-bottom:1px solid rgba(255,255,255,0.06);}
+#sc-head{display:flex;align-items:center;justify-content:space-between;padding:14px 24px;background:#070e14;border-bottom:1px solid rgba(255,255,255,0.08);flex-shrink:0;}
 #sc-title{font-size:13px;font-weight:800;letter-spacing:0.1em;color:#dde8f0;}
-#sc-close{font-size:20px;cursor:pointer;color:#607a8e;padding:4px 10px;border:1px solid rgba(255,255,255,0.06);border-radius:2px;}
-#sc-close:hover{color:#dde8f0;}
-#sc-body{display:grid;grid-template-columns:1fr 360px;flex:1;overflow:hidden;min-height:0;}
-#sc-map{flex:1;position:relative;background:#040608;overflow:hidden;}
-#sc-map svg{width:100%;height:100%;}
+#sc-close{font-size:14px;cursor:pointer;color:#607a8e;padding:5px 14px;border:1px solid rgba(255,255,255,0.1);border-radius:2px;font-family:'Syne Mono',monospace;letter-spacing:0.1em;}
+#sc-close:hover{color:#dde8f0;border-color:rgba(255,45,85,0.4);}
+#sc-body{display:grid;grid-template-columns:1fr 380px;flex:1;overflow:hidden;min-height:0;}
+#sc-map{position:relative;background:#040608;overflow:hidden;}
+#sc-map svg{width:100%;height:100%;display:block;}
 #sc-detail{background:#070e14;border-left:1px solid rgba(255,255,255,0.06);display:flex;flex-direction:column;overflow:hidden;}
 #sc-detail-head{padding:14px 18px;border-bottom:1px solid rgba(255,255,255,0.06);flex-shrink:0;}
 #sc-detail-body{flex:1;overflow-y:auto;padding:14px 18px;}
@@ -792,23 +792,26 @@ async function fetchRSS(src){
 
 async function fetchAllNews(){
   const all=[];
-  // CryptoCompare always works
+  
+  // CryptoCompare - fastest, always works
   try{
-    const r=await fetch('https://min-api.cryptocompare.com/data/v2/news/?lang=EN&sortOrder=latest',{signal:AbortSignal.timeout(8000)});
+    const r=await fetch('https://min-api.cryptocompare.com/data/v2/news/?lang=EN&sortOrder=latest',{signal:AbortSignal.timeout(6000)});
     const d=await r.json();
-    if(d.Data)all.push(...d.Data.slice(0,20).map(a=>({title:a.title,url:a.url,age:Math.floor((Date.now()/1000-a.published_on)/60),src:a.source_info?.name||'Crypto',type:'ECON'})));
+    if(d.Data)all.push(...d.Data.slice(0,25).map(a=>({title:a.title,url:a.url,age:Math.floor((Date.now()/1000-a.published_on)/60),src:a.source_info?.name||'Crypto',type:'ECON'})));
   }catch(e){}
 
-  // Parallel RSS
+  // Show initial results immediately if we have crypto news
+  if(all.length > 0){
+    const seen=new Set();
+    NEWS=all.filter(a=>{const k=a.title.slice(0,40);if(seen.has(k)||!a.title)return false;seen.add(k);return true;});
+    NEWS.sort((a,b)=>a.age-b.age);
+    classifyAndRenderEvents();
+    renderTicker();
+  }
+
+  // Now fetch RSS feeds in parallel with short timeout
   const results=await Promise.allSettled(SOURCES.map(s=>fetchRSS(s)));
   results.forEach(r=>{if(r.status==='fulfilled')all.push(...r.value);});
-
-  if(!all.length)return;
-
-  // Deduplicate
-  const seen=new Set();
-  NEWS=all.filter(a=>{const k=a.title.slice(0,40);if(seen.has(k)||!a.title)return false;seen.add(k);return true;});
-  NEWS.sort((a,b)=>a.age-b.age);
 
   document.getElementById('feed-count').textContent=NEWS.length;
   document.getElementById('last-update').textContent='UPDATED '+new Date().toUTCString().slice(17,25)+' UTC';
